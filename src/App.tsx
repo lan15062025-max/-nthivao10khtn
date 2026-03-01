@@ -13,6 +13,7 @@ import {
   Timer,
   AlertCircle,
   Menu,
+  Zap,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,13 +21,14 @@ import { Question, Subject, QuizResult, Subject as SubjectType } from './types';
 import { QUESTIONS, SUBJECTS, TOPICS_BY_SUBJECT } from './constants';
 
 type AppMode = 'home' | 'quiz' | 'result' | 'history';
-type QuizType = 'mock' | 'subject' | 'topic';
+type QuizType = 'mock' | 'mega' | 'subject' | 'topic';
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>('home');
   const [quizType, setQuizType] = useState<QuizType>('mock');
   const [selectedSubject, setSelectedSubject] = useState<SubjectType | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<Question['level'] | 'Tất cả'>('Tất cả');
   
   const [currentQuestions, setCurrentQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -65,21 +67,34 @@ export default function App() {
     let filtered: Question[] = [];
     let duration = 0;
 
+    const filterByLevel = (qs: Question[]) => {
+      if (selectedLevel === 'Tất cả') return qs;
+      return qs.filter(q => q.level === selectedLevel);
+    };
+
     if (type === 'mock') {
       // Standard 40 questions mock exam
-      // 14 Physics, 14 Chemistry, 12 Biology
       const physics = QUESTIONS.filter(q => q.subject === 'Vật lí').sort(() => Math.random() - 0.5).slice(0, 14);
       const chemistry = QUESTIONS.filter(q => q.subject === 'Hóa học').sort(() => Math.random() - 0.5).slice(0, 14);
       const biology = QUESTIONS.filter(q => q.subject === 'Sinh học').sort(() => Math.random() - 0.5).slice(0, 12);
       
-      // If we don't have enough questions in the mock data, just take what we have
       filtered = [...physics, ...chemistry, ...biology].sort(() => Math.random() - 0.5);
-      duration = 50 * 60; // 50 minutes for 40 questions
+      duration = 50 * 60; // 50 minutes
+    } else if (type === 'mega') {
+      // Mega 120 questions mock exam
+      const physics = QUESTIONS.filter(q => q.subject === 'Vật lí').sort(() => Math.random() - 0.5).slice(0, 42);
+      const chemistry = QUESTIONS.filter(q => q.subject === 'Hóa học').sort(() => Math.random() - 0.5).slice(0, 42);
+      const biology = QUESTIONS.filter(q => q.subject === 'Sinh học').sort(() => Math.random() - 0.5).slice(0, 36);
+      
+      filtered = [...physics, ...chemistry, ...biology].sort(() => Math.random() - 0.5);
+      duration = 150 * 60; // 150 minutes
     } else if (type === 'subject' && subject) {
-      filtered = QUESTIONS.filter(q => q.subject === subject).sort(() => Math.random() - 0.5);
+      const subjectQuestions = QUESTIONS.filter(q => q.subject === subject);
+      filtered = filterByLevel(subjectQuestions).sort(() => Math.random() - 0.5).slice(0, 20);
       duration = filtered.length * 90; // 90 seconds per question
     } else if (type === 'topic' && topic) {
-      filtered = QUESTIONS.filter(q => q.topic === topic).sort(() => Math.random() - 0.5);
+      const topicQuestions = QUESTIONS.filter(q => q.topic === topic);
+      filtered = filterByLevel(topicQuestions).sort(() => Math.random() - 0.5).slice(0, 20);
       duration = filtered.length * 90;
     }
 
@@ -188,6 +203,29 @@ export default function App() {
           </div>
         </motion.div>
 
+        {/* Mega Mock Card */}
+        <motion.div 
+          whileHover={{ y: -5 }}
+          className="bg-indigo-600 rounded-3xl p-8 text-white shadow-xl cursor-pointer relative overflow-hidden group"
+          onClick={() => startQuiz('mega')}
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Zap size={120} />
+          </div>
+          <div className="relative z-10 space-y-4">
+            <div className="bg-white/20 w-12 h-12 rounded-xl flex items-center justify-center">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">Mega Mock Exam</h2>
+              <p className="text-indigo-100 mt-1">120 câu hỏi - 150 phút - Toàn diện</p>
+            </div>
+            <button className="bg-white text-indigo-600 px-6 py-2 rounded-full font-semibold flex items-center gap-2 hover:bg-indigo-50 transition-colors">
+              Thử thách <ChevronRight size={18} />
+            </button>
+          </div>
+        </motion.div>
+
         {/* History/Stats Card */}
         <motion.div 
           whileHover={{ y: -5 }}
@@ -219,7 +257,10 @@ export default function App() {
             <motion.button
               key={subject}
               whileTap={{ scale: 0.95 }}
-              onClick={() => startQuiz('subject', subject)}
+              onClick={() => {
+                setSelectedSubject(subject);
+                setMode('topic_select');
+              }}
               className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all text-left space-y-3"
             >
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -239,26 +280,84 @@ export default function App() {
           ))}
         </div>
       </div>
-
-      <div className="space-y-4">
-        <h3 className="text-xl font-bold text-gray-900">Chuyên Đề Trọng Tâm</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {Object.entries(TOPICS_BY_SUBJECT).flatMap(([sub, topics]) => 
-            topics.slice(0, 2).map(topic => (
-              <button
-                key={topic}
-                onClick={() => startQuiz('topic', sub as SubjectType, topic)}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-blue-50 hover:text-blue-700 transition-colors text-left"
-              >
-                <span className="text-sm font-medium">{topic}</span>
-                <ChevronRight size={16} className="opacity-50" />
-              </button>
-            ))
-          )}
-        </div>
-      </div>
     </div>
   );
+
+  const renderTopicSelect = () => {
+    if (!selectedSubject) return null;
+    const topics = TOPICS_BY_SUBJECT[selectedSubject];
+    const levels: (Question['level'] | 'Tất cả')[] = ['Tất cả', 'Nhận biết', 'Thông hiểu', 'Vận dụng'];
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 p-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => {
+                setMode('home');
+                setSelectedLevel('Tất cả');
+              }}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X size={24} />
+            </button>
+            <h2 className="text-3xl font-bold text-gray-900">Chọn chủ đề: {selectedSubject}</h2>
+          </div>
+
+          <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl self-start">
+            {levels.map((l) => (
+              <button
+                key={l}
+                onClick={() => setSelectedLevel(l)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  selectedLevel === l 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => startQuiz('subject', selectedSubject)}
+            className="bg-blue-600 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between group"
+          >
+            <div className="text-left">
+              <h3 className="text-xl font-bold">Tất cả {selectedSubject}</h3>
+              <p className="text-blue-100 text-sm">
+                {QUESTIONS.filter(q => q.subject === selectedSubject && (selectedLevel === 'Tất cả' || q.level === selectedLevel)).length} câu hỏi phù hợp
+              </p>
+            </div>
+            <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+          </motion.button>
+
+          {topics.map((topic) => (
+            <motion.button
+              key={topic}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => startQuiz('topic', selectedSubject, topic)}
+              className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all text-left flex items-center justify-between group"
+            >
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">{topic}</h3>
+                <p className="text-xs text-gray-500">
+                  {QUESTIONS.filter(q => q.topic === topic && (selectedLevel === 'Tất cả' || q.level === selectedLevel)).length} câu hỏi phù hợp
+                </p>
+              </div>
+              <ChevronRight className="text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
+            </motion.button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const renderQuiz = () => {
     const question = currentQuestions[currentIndex];
@@ -286,12 +385,15 @@ export default function App() {
               <p className="text-xs text-gray-500">Câu {currentIndex + 1} / {currentQuestions.length}</p>
             </div>
           </div>
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono font-bold ${
-            timeLeft < 60 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-blue-50 text-blue-600'
+          <motion.div 
+            animate={timeLeft < 60 ? { scale: [1, 1.05, 1] } : {}}
+            transition={{ repeat: Infinity, duration: 1 }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono font-bold ${
+            timeLeft < 60 ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'
           }`}>
             <Clock size={18} />
             {formatTime(timeLeft)}
-          </div>
+          </motion.div>
         </div>
 
         {/* Progress Bar */}
@@ -307,9 +409,10 @@ export default function App() {
         <AnimatePresence mode="wait">
           <motion.div 
             key={currentIndex}
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -20, opacity: 0 }}
+            initial={{ y: 20, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -20, opacity: 0, scale: 0.98 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 space-y-8"
           >
             <div className="space-y-4">
@@ -328,8 +431,10 @@ export default function App() {
 
             <div className="grid grid-cols-1 gap-3">
               {question.options.map((option, idx) => (
-                <button
+                <motion.button
                   key={idx}
+                  whileHover={{ scale: 1.01, x: 5 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => handleAnswer(idx)}
                   className={`p-5 rounded-2xl text-left transition-all border-2 flex items-center justify-between group ${
                     userAnswers[currentIndex] === idx
@@ -338,17 +443,29 @@ export default function App() {
                   }`}
                 >
                   <div className="flex items-center gap-4">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    <motion.span 
+                      animate={userAnswers[currentIndex] === idx ? { scale: [1, 1.2, 1] } : {}}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                       userAnswers[currentIndex] === idx
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600'
                     }`}>
                       {String.fromCharCode(65 + idx)}
-                    </span>
+                    </motion.span>
                     <span className="font-medium">{option}</span>
                   </div>
-                  {userAnswers[currentIndex] === idx && <CheckCircle2 size={20} className="text-blue-600" />}
-                </button>
+                  <AnimatePresence>
+                    {userAnswers[currentIndex] === idx && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                      >
+                        <CheckCircle2 size={20} className="text-blue-600" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
               ))}
             </div>
           </motion.div>
@@ -356,28 +473,34 @@ export default function App() {
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-between pt-4">
-          <button
+          <motion.button
+            whileHover={{ x: -5 }}
+            whileTap={{ scale: 0.95 }}
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex(prev => prev - 1)}
             className="px-6 py-3 rounded-2xl font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-30 transition-all"
           >
             Quay lại
-          </button>
+          </motion.button>
           
           {currentIndex === currentQuestions.length - 1 ? (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleSubmit}
               className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
             >
               Nộp bài
-            </button>
+            </motion.button>
           ) : (
-            <button
+            <motion.button
+              whileHover={{ x: 5 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setCurrentIndex(prev => prev + 1)}
               className="px-8 py-3 bg-gray-900 text-white rounded-2xl font-bold hover:bg-black transition-all flex items-center gap-2"
             >
               Tiếp theo <ChevronRight size={18} />
-            </button>
+            </motion.button>
           )}
         </div>
 
@@ -455,23 +578,46 @@ export default function App() {
             <p className="text-gray-500">Bạn đã hoàn thành bài thi trong {formatTime(lastResult.timeTaken)}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+          <motion.div 
+            variants={{
+              hidden: { opacity: 0 },
+              show: {
+                opacity: 1,
+                transition: {
+                  staggerChildren: 0.1,
+                  delayChildren: 0.5
+                }
+              }
+            }}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4"
+          >
             {Object.entries(lastResult.subjectStats).map(([subject, stats]: [any, any]) => (
-              <div key={subject} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+              <motion.div 
+                key={subject} 
+                variants={{
+                  hidden: { y: 20, opacity: 0 },
+                  show: { y: 0, opacity: 1 }
+                }}
+                className="p-4 bg-gray-50 rounded-2xl border border-gray-100"
+              >
                 <p className="text-xs font-bold text-gray-400 uppercase mb-1">{subject}</p>
                 <p className="text-xl font-bold text-gray-900">{stats.correct}/{stats.total}</p>
                 <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(stats.correct / stats.total) * 100 || 0}%` }}
+                    transition={{ duration: 1, delay: 0.8 }}
                     className={`h-full ${
                       subject === 'Vật lí' ? 'bg-purple-500' :
                       subject === 'Hóa học' ? 'bg-emerald-500' : 'bg-rose-500'
                     }`}
-                    style={{ width: `${(stats.correct / stats.total) * 100 || 0}%` }}
                   />
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
           <div className="flex flex-col sm:flex-row gap-4 pt-6">
             <button
@@ -612,7 +758,10 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div 
             className="flex items-center gap-2 cursor-pointer group"
-            onClick={() => setMode('home')}
+            onClick={() => {
+              setMode('home');
+              setSelectedLevel('Tất cả');
+            }}
           >
             <div className="bg-blue-600 p-2 rounded-xl group-hover:rotate-12 transition-transform">
               <GraduationCap className="text-white w-5 h-5" />
@@ -621,7 +770,10 @@ export default function App() {
           </div>
           
           <div className="hidden md:flex items-center gap-8">
-            <button onClick={() => setMode('home')} className={`text-sm font-bold transition-colors ${mode === 'home' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>Trang chủ</button>
+            <button onClick={() => {
+              setMode('home');
+              setSelectedLevel('Tất cả');
+            }} className={`text-sm font-bold transition-colors ${mode === 'home' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>Trang chủ</button>
             <button onClick={() => setMode('history')} className={`text-sm font-bold transition-colors ${mode === 'history' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>Lịch sử</button>
             <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-gray-500 hover:text-gray-900">Tài liệu</a>
           </div>
@@ -649,6 +801,7 @@ export default function App() {
             transition={{ duration: 0.2 }}
           >
             {mode === 'home' && renderHome()}
+            {mode === 'topic_select' && renderTopicSelect()}
             {mode === 'quiz' && renderQuiz()}
             {mode === 'result' && renderResult()}
             {mode === 'history' && renderHistory()}
